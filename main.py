@@ -30,13 +30,9 @@ def details():
     url = request.args.get('url', '')
     r = session.get(url, headers=HEADERS)
     soup = BeautifulSoup(r.text, "html.parser")
-    
     img = soup.find("img", class_="img-fluid")
     syn = soup.find("p", id="synopsisText")
-    
-    # Récupération des lecteurs (souvent dans des iframes)
     lecteurs = [iframe['src'] for iframe in soup.find_all("iframe", src=True)]
-    
     return jsonify({
         "image": img['src'] if img else "",
         "synopsis": syn.text.strip() if syn else "Aucun synopsis.",
