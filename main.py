@@ -2,52 +2,60 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
-import re
 
 app = Flask(__name__)
 CORS(app)
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+# On utilise une session pour garder les cookies, ce que le site demande
+session = requests.Session()
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Referer": "https://anime-sama.to/",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+}
 
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
     url = f"https://anime-sama.to/catalogue/?search={query}"
-    r = requests.get(url, headers=HEADERS)
+    
+    # On fait une première visite pour récupérer les cookies du site
+    session.get("https://anime-sama.to/", headers=HEADERS)
+    
+    # On fait la vraie recherche
+    r = session.get(url, headers=HEADERS)
+    
+    # DEBUG : Voir si on est bloqué
+    print(f"Status Code: {r.status_code}")
+    
     soup = BeautifulSoup(r.text, "html.parser")
     results = []
-    for card in soup.select(".cardAnime, .anime-card, .catalog-card"):
-        link = card.find("a")
-        title = card.find(["h1", "h2", "h3", "p"])
-        if link and title:
-            results.append({"title": title.text.strip(), "url": "https://anime-sama.to" + link['href']})
-    return jsonify(results)
+    
+    # Recherche large : on prend tous les liens qui ont un titre et qui pointent vers /catalogue/
+    for a in soup.find_all("a", href=True):
+        if "/catalogue/" in a['href'] and len(a.text.strip()) > 3:
+            # On vérifie que c'est bien un titre d'animé
+            if "page" not in a.text.lower() and "recherche" not in a.text.lower():
+                results.append({
+                    "title": a.text.strip(), 
+                    "url": "https://anime-sama.to" + a['href']
+                })
+    
+    # On retire les doublons
+    unique_results = {v['title']: v for v in results}.values()
+    return jsonify(list(unique_results))
 
 @app.route('/details')
 def details():
     url = request.args.get('url', '')
-    r = requests.get(url, headers=HEADERS)
+    r = session.get(url, headers=HEADERS)
     soup = BeautifulSoup(r.text, "html.parser")
     
-    # Image et Synopsis
-    img = soup.find("img", class_="img-fluid")
     syn = soup.find("p", id="synopsisText")
-    
-    # Lecteurs (extraction simplifiée)
-    versions = {"PRINCIPALE": {}}
-    js_url = url.rstrip('/') + "/episodes.js"
-    js_res = requests.get(js_url, headers=HEADERS)
-    if js_res.status_code == 200:
-        matches = re.findall(r"var\s+(eps\d+)\s*=\s*\[(.*?)\]", js_res.text)
-        for var_name, content in matches:
-            links = re.findall(r'"(https?://.*?)"', content)
-            versions["PRINCIPALE"][f"Lecteur {var_name.replace('eps', '')}"] = links
-            
     return jsonify({
-        "image": img['src'] if img else "",
-        "synopsis": syn.text.strip() if syn else "",
-        "versions": versions
+        "synopsis": syn.text.strip() if syn else "Aucun synopsis.",
+        "image": soup.find("img", class_="img-fluid")['src'] if soup.find("img", class_="img-fluid") else ""
     })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=10000)
