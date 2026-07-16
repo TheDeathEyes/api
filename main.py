@@ -21,18 +21,28 @@ def search():
     results = []
     for a in soup.find_all("a", href=True):
         if "/catalogue/" in a['href'] and len(a.text.strip()) > 3:
-            if "page" not in a.text.lower() and "recherche" not in a.text.lower():
-                results.append({"title": a.text.strip(), "url": "https://anime-sama.to" + a['href']})
+            # Sécurisation : construire l'URL proprement
+            link = a['href']
+            if not link.startswith("http"):
+                link = "https://anime-sama.to" + link
+            elif "anime-sama.to" not in link:
+                continue # Ignore liens externes
+                
+            results.append({"title": a.text.strip(), "url": link})
     return jsonify(list({v['title']:v for v in results}.values()))
 
 @app.route('/details')
 def details():
     url = request.args.get('url', '')
+    if not url.startswith("http"): return jsonify({"error": "URL invalide"}), 400
+    
     r = session.get(url, headers=HEADERS)
     soup = BeautifulSoup(r.text, "html.parser")
+    
     img = soup.find("img", class_="img-fluid")
     syn = soup.find("p", id="synopsisText")
     lecteurs = [iframe['src'] for iframe in soup.find_all("iframe", src=True)]
+    
     return jsonify({
         "image": img['src'] if img else "",
         "synopsis": syn.text.strip() if syn else "Aucun synopsis.",
