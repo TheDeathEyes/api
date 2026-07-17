@@ -27,3 +27,7 @@ Une interface de streaming d'animes légère et performante, permettant de reche
 3. Lancer le serveur :
    ```bash
    python main.py
+
+PS: Possibilité d'héberger sur des services comme render.com ou Vercel.
+
+By everyone
