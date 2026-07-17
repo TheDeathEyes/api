@@ -62,47 +62,46 @@ def get_episodes():
         page_res = session.get(url_anime, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(page_res.text, "html.parser")
         
-        # Synopsis
         synopsis_p = soup.find("p", id="synopsisText") or soup.find("p", class_=["synopsis", "text-sm"])
         if synopsis_p: metadata["synopsis"] = synopsis_p.text.strip()
         
-        # Image
         img_tag = soup.find("meta", property="og:image") or soup.find("img", class_="cover")
         if img_tag: metadata["image"] = img_tag.get("content") or img_tag.get("src")
         
-        # Trailer
         trailer_iframe = soup.find("iframe", src=re.compile(r"youtube|dailymotion|vimeo"))
         if trailer_iframe: metadata["trailer"] = trailer_iframe.get("src")
     except:
         pass
 
-# --- PARTIE 2 : EXTRACTION EPISODES ---
+    # --- PARTIE 2 : EXTRACTION EPISODES ---
     url_base = url_anime.rstrip('/')
-    donnees_episodes = {} # Structure: { "Saison 1": { "VOSTFR": { "Lecteur 1": {...} } } }
+    donnees_episodes = {} 
     
     variantes_sous_urls = [
         f"{url_base}/vostfr/episodes.js", f"{url_base}/vf/episodes.js",
         f"{url_base}/saison1/vostfr/episodes.js", f"{url_base}/saison1/vf/episodes.js",
         f"{url_base}/saison2/vostfr/episodes.js", f"{url_base}/saison2/vf/episodes.js",
         f"{url_base}/episodes.js" 
-        # Note: Le script continuera de chercher dynamiquement
     ]
 
     for js_url in variantes_sous_urls:
         try:
             js_res = session.get(js_url, headers=HEADERS, timeout=5)
             if js_res.status_code == 200 and "eps" in js_res.text:
-                # 1. Détection Saison/Film
                 js_url_lower = js_url.lower()
-                saison = "Saison 1" # Défaut
+                
+                # Nettoyage Saison
+                saison = "Saison 1" 
                 if "saison" in js_url_lower:
-                    match = re.search(r'(saison\d+)', js_url_lower)
-                    if match: saison = match.group(1).capitalize()
+                    match = re.search(r'saison(\d+)', js_url_lower)
+                    if match: saison = f"Saison {match.group(1)}"
                 elif "film" in js_url_lower:
                     saison = "Film"
                 
-                # 2. Détection Version
-                nom_version = "VOSTFR" if "vostfr" in js_url_lower else ("VF" if "vf" in js_url_lower else "Version")
+                # Nettoyage Version
+                nom_version = "VOSTFR"
+                if "vf" in js_url_lower: nom_version = "VF"
+                elif "vostfr" in js_url_lower: nom_version = "VOSTFR"
 
                 # Initialisation structure
                 if saison not in donnees_episodes: donnees_episodes[saison] = {}
@@ -114,7 +113,15 @@ def get_episodes():
                     if liens_bruts:
                         num_lecteur = nom_var.replace("eps", "")
                         nom_hebergeur = f"Lecteur {num_lecteur}"
-                        # ... (garder ton code de nettoyage de liens et typage lecteur ici) ...
                         liens_corriges = [l.replace("vidmoly.to", "vidmoly.biz") for l in liens_bruts]
                         donnees_episodes[saison][nom_version][nom_hebergeur] = {"num": num_lecteur, "liens": liens_corriges}
         except: continue
+
+    # !!! C'EST ICI QU'IL MANQUAIT LE RETURN !!!
+    return jsonify({
+        "metadata": metadata,
+        "episodes": donnees_episodes
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
