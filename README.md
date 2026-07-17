@@ -23,7 +23,7 @@ Une interface de streaming d'animes légère et performante, permettant de reche
 1. S'assurer d'avoir Python installé.
 2. Installer les dépendances :
    ```bash
-   pip install flask requests beautifulsoup4 flask-cors
+   pip install requirements.txt
 3. Lancer le serveur :
    ```bash
    python main.py
